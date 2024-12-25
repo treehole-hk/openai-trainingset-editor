@@ -171,6 +171,19 @@ export default function FineTuneEditor() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <a
+                    href="https://ko-fi.com/M4M617YPUV"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:opacity-90 transition-opacity"
+                  >
+                    <img
+                      height="36"
+                      src="https://storage.ko-fi.com/cdn/kofi6.png?v=6"
+                      alt="Buy Me a Coffee at ko-fi.com"
+                      className="h-9"
+                    />
+                  </a>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -192,7 +205,9 @@ export default function FineTuneEditor() {
           initial={{ x: -320 }}
           animate={{ x: 0 }}
           transition={{ type: "spring", damping: 20 }}
-          className="border-r border-border/10 bg-white dark:bg-[#1f1f1f] overflow-hidden relative" 
+          className={`border-r border-border/10 bg-white dark:bg-[#1f1f1f] overflow-hidden relative ${
+            jsonlData.length === 0 ? 'hidden' : ''
+          }`}
           style={{ width: leftBarWidth }}
         >
           <div className="p-4 border-b border-border/10 flex items-center gap-2">
@@ -249,20 +264,20 @@ export default function FineTuneEditor() {
                 <Settings className="w-6 h-6 text-primary animate-spin-slow" />
                 <h1 className="text-2xl font-bold text-foreground/90">OpenAI Fine-tune Editor</h1>
               </div>
-              <div className="flex gap-2">
-                <label className="relative cursor-pointer">
-                  <Input 
-                    type="file" 
-                    onChange={handleFileUpload} 
-                    accept=".jsonl" 
-                    className="sr-only"
-                  />
-                  <div className="flex items-center gap-2 px-4 py-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-md transition-colors">
-                    <Upload className="w-4 h-4" />
-                    <span>Upload JSONL</span>
-                  </div>
-                </label>
-                {jsonlData.length > 0 && (
+              {jsonlData.length > 0 ? (
+                <div className="flex gap-2">
+                  <label className="relative cursor-pointer">
+                    <Input 
+                      type="file" 
+                      onChange={handleFileUpload} 
+                      accept=".jsonl" 
+                      className="sr-only"
+                    />
+                    <div className="flex items-center gap-2 px-4 py-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-md transition-colors">
+                      <Upload className="w-4 h-4" />
+                      <span>Upload JSONL</span>
+                    </div>
+                  </label>
                   <Button 
                     onClick={handleDownload} 
                     className="bg-primary hover:bg-primary/90 gap-2"
@@ -270,8 +285,32 @@ export default function FineTuneEditor() {
                     <Download className="w-4 h-4" />
                     Download JSONL
                   </Button>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center mt-20">
+                  <motion.div
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", damping: 20 }}
+                  >
+                    <label className="relative cursor-pointer">
+                      <Input 
+                        type="file" 
+                        onChange={handleFileUpload} 
+                        accept=".jsonl" 
+                        className="sr-only"
+                      />
+                      <div className="flex flex-col items-center gap-4 p-8 border-2 border-dashed border-primary/20 hover:border-primary rounded-lg bg-primary/5 hover:bg-primary/10 transition-all group">
+                        <Upload className="w-12 h-12 text-primary group-hover:scale-110 transition-transform" />
+                        <div className="text-center">
+                          <h3 className="text-lg font-semibold text-primary mb-2">Upload your JSONL file</h3>
+                          <p className="text-sm text-foreground/70">Click or drag and drop your file here</p>
+                        </div>
+                      </div>
+                    </label>
+                  </motion.div>
+                </div>
+              )}
             </div>
 
             <AnimatePresence>
