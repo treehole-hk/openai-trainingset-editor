@@ -1,12 +1,12 @@
-import { Homepage } from '../components/homepage'
 import { EditorContent } from '../components/editor-content'
 import { Twitter, Linkedin } from 'lucide-react'
+import { TopBanner } from '../components/top-banner'
 
 export default function FineTuneEditor() {
   return (
     <div className="flex flex-col h-screen bg-[#111111] dark:bg-[#111111]">
       {/* Top banner */}
-      <Homepage />
+      <TopBanner />
       
       {/* Main content */}
       <div className="flex-1 overflow-auto">
@@ -29,7 +29,7 @@ export default function FineTuneEditor() {
               </div>
 
               <div className="flex-1 space-y-4">
-                <h2 className="text-xl font-semibold text-white/90">🤖 The AI-Powered Journey</h2>
+                <h2 className="text-xl font-semibold text-white/90">The AI-Powered Journey</h2>
                 <p className="text-white/70">
                   Here's something cool: I didn't write a single line of code for this tool! The entire project was created through AI pair programming.
                   It started as a sketch using v0 by Vercel, then moved to GitHub where Cursor (an AI-powered IDE) helped build everything you see here.
