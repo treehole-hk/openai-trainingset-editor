@@ -8,6 +8,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { parseJSONL, stringifyJSONL, extractSubject } from '../utils/jsonl'
+import { MessageSquare, Download, Upload, Save, ChevronRight, Bot, User, Settings, AlertTriangle, Github, X } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 export default function FineTuneEditor() {
   const [jsonlData, setJsonlData] = useState<any[]>([]);
@@ -17,7 +19,8 @@ export default function FineTuneEditor() {
   const [showSaveButton, setShowSaveButton] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [nextSelectedIndex, setNextSelectedIndex] = useState<number | null>(null);
-  const [leftBarWidth, setLeftBarWidth] = useState(256); // Default width
+  const [leftBarWidth, setLeftBarWidth] = useState(320); // Wider default width
+  const [showBanner, setShowBanner] = useState(true);
   const leftBarRef = useRef<HTMLDivElement>(null);
   const resizeRef = useRef<HTMLDivElement>(null);
 
@@ -74,8 +77,12 @@ export default function FineTuneEditor() {
         const { data, errors } = parseJSONL(content);
         setJsonlData(data);
         setParseErrors(errors);
-        setSelectedIndex(null);
         setDirtyFields({});
+        if (data.length > 0 && errors.length === 0) {
+          setSelectedIndex(0);
+        } else {
+          setSelectedIndex(null);
+        }
       };
       reader.readAsText(file);
     }
@@ -135,113 +142,253 @@ export default function FineTuneEditor() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <div ref={leftBarRef} className="bg-white shadow-md overflow-hidden relative" style={{ width: leftBarWidth }}>
-        <ScrollArea className="h-full">
-          <div className="p-4">
-            <h2 className="text-lg font-semibold mb-4 text-gray-700">Subjects</h2>
-            {jsonlData.map((item, index) => (
-              <Button
-                key={index}
-                variant="ghost"
-                className={`w-full justify-start mb-2 text-left ${
-                  selectedIndex === index ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'
-                }`}
-                onClick={() => handleSubjectClick(index)}
-              >
-                <div className="w-full overflow-hidden">
-                  <p className="truncate">
-                    {extractSubject(item)}
+    <div className="flex flex-col h-screen bg-[#fafafa] dark:bg-[#1a1a1a]">
+      <AnimatePresence>
+        {showBanner && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="relative bg-primary/10 dark:bg-primary/20 border-b border-border/10"
+          >
+            <div className="max-w-7xl mx-auto py-3 px-4 sm:px-6 lg:px-8">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center flex-1 min-w-0 gap-3">
+                  <Github className="h-5 w-5 text-primary" />
+                  <p className="text-sm text-foreground/90">
+                    <span>This is a free, open-source project with </span>
+                    <span className="font-medium text-primary">no ads or tracking</span>
+                    <span>. Visit the </span>
+                    <a
+                      href="https://github.com/buryhuang/openai-trainingset-editor"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-primary hover:text-primary/80 underline-offset-4 hover:underline"
+                    >
+                      GitHub Repository
+                    </a>
+                    <span>. Your support helps keep this tool ad-free and continuously improved.</span>
                   </p>
                 </div>
-              </Button>
-            ))}
-          </div>
-        </ScrollArea>
-        <div
-          ref={resizeRef}
-          className="absolute top-0 right-0 w-1 h-full cursor-col-resize bg-gray-300 hover:bg-blue-500 transition-colors"
-        />
-      </div>
-      <div className="flex-1 overflow-auto relative">
-        <div className="max-w-4xl mx-auto p-6">
-          <h1 className="text-3xl font-bold mb-6 text-gray-800">OpenAI Fine-tune JSONL Editor</h1>
-          <Input type="file" onChange={handleFileUpload} accept=".jsonl" className="mb-6" />
-          {parseErrors.length > 0 && (
-            <div className="mb-6 p-4 bg-red-100 text-red-700 rounded-lg shadow">
-              <h2 className="font-bold mb-2">Parsing Errors:</h2>
-              <ul className="list-disc pl-5">
-                {parseErrors.map((error, index) => (
-                  <li key={index}>{error}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {jsonlData.length > 0 && (
-            <Button onClick={handleDownload} className="mb-6 bg-green-500 hover:bg-green-600 text-white">
-              Download Edited JSONL
-            </Button>
-          )}
-          {selectedIndex !== null && (
-            <Card className="mb-6 shadow-lg">
-              <CardHeader className="bg-gray-50 sticky top-0 z-10">
-                <CardTitle className="text-xl text-gray-700">Entry {selectedIndex + 1}</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                {jsonlData[selectedIndex].messages.map((msg: any, msgIndex: number) => (
-                  <div 
-                    key={msg.id} 
-                    className={`p-4 ${
-                      msg.role === 'system' 
-                        ? 'bg-blue-50 border-b border-blue-100' 
-                        : msg.role === 'assistant' 
-                          ? 'flex justify-start' 
-                          : 'flex justify-end'
-                    }`}
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-foreground/60 hover:text-foreground"
+                    onClick={() => setShowBanner(false)}
                   >
-                    <div className={`${msg.role !== 'system' ? 'w-[80%]' : 'w-full'} ${
-                      msg.role === 'assistant' ? 'mr-[20%]' : msg.role === 'user' ? 'ml-[20%]' : ''
-                    }`}>
-                      <h3 className={`font-semibold mb-2 ${
-                        msg.role === 'system' 
-                          ? 'text-blue-700' 
-                          : msg.role === 'assistant' 
-                            ? 'text-green-700' 
-                            : 'text-blue-700'
-                      } capitalize`}>
-                        {msg.role}
-                      </h3>
-                      <Textarea
-                        value={msg.content}
-                        onChange={(e) => handleInputChange(msg.id, e.target.value)}
-                        className={`w-full p-2 border rounded-md ${
-                          msg.role === 'system' 
-                            ? 'bg-white' 
-                            : msg.role === 'assistant' 
-                              ? 'bg-green-50' 
-                              : 'bg-blue-50'
-                        } ${dirtyFields[msg.id] ? 'bg-red-100 border-yellow-500' : ''}`}
-                        rows={Math.min(10, Math.max(3, msg.content.split('\n').length))}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-        </div>
-        {showSaveButton && (
-          <div className="fixed bottom-4 right-4">
-            <Button onClick={handleSave} className="bg-blue-500 hover:bg-blue-600 text-white">
-              Save Changes
-            </Button>
-          </div>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
         )}
+      </AnimatePresence>
+
+      <div className="flex flex-1 overflow-hidden">
+        <motion.div 
+          ref={leftBarRef} 
+          initial={{ x: -320 }}
+          animate={{ x: 0 }}
+          transition={{ type: "spring", damping: 20 }}
+          className="border-r border-border/10 bg-white dark:bg-[#1f1f1f] overflow-hidden relative" 
+          style={{ width: leftBarWidth }}
+        >
+          <div className="p-4 border-b border-border/10 flex items-center gap-2">
+            <MessageSquare className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold text-foreground/90">Conversations</h2>
+          </div>
+          <ScrollArea className="h-[calc(100vh-65px)]">
+            <div className="p-2">
+              <AnimatePresence>
+                {jsonlData.map((item, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.2, delay: index * 0.05 }}
+                  >
+                    <Button
+                      variant={selectedIndex === index ? "secondary" : "ghost"}
+                      className={`w-full justify-start mb-1 p-3 h-auto text-left transition-all group ${
+                        selectedIndex === index 
+                          ? 'bg-secondary/80 text-secondary-foreground' 
+                          : 'text-foreground/70 hover:bg-secondary/40'
+                      }`}
+                      onClick={() => handleSubjectClick(index)}
+                    >
+                      <div className="w-full overflow-hidden flex items-center gap-2">
+                        <ChevronRight className={`w-4 h-4 transition-transform ${
+                          selectedIndex === index ? 'rotate-90' : 'group-hover:translate-x-1'
+                        }`} />
+                        <p className="truncate text-sm font-medium">
+                          {extractSubject(item)}
+                        </p>
+                      </div>
+                    </Button>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          </ScrollArea>
+          <div
+            ref={resizeRef}
+            className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/50 transition-colors"
+          />
+        </motion.div>
+        <div className="flex-1 overflow-auto">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="max-w-4xl mx-auto p-6 space-y-6"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Settings className="w-6 h-6 text-primary animate-spin-slow" />
+                <h1 className="text-2xl font-bold text-foreground/90">OpenAI Fine-tune Editor</h1>
+              </div>
+              <div className="flex gap-2">
+                <label className="relative cursor-pointer">
+                  <Input 
+                    type="file" 
+                    onChange={handleFileUpload} 
+                    accept=".jsonl" 
+                    className="sr-only"
+                  />
+                  <div className="flex items-center gap-2 px-4 py-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-md transition-colors">
+                    <Upload className="w-4 h-4" />
+                    <span>Upload JSONL</span>
+                  </div>
+                </label>
+                {jsonlData.length > 0 && (
+                  <Button 
+                    onClick={handleDownload} 
+                    className="bg-primary hover:bg-primary/90 gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download JSONL
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <AnimatePresence>
+              {parseErrors.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <Card className="border-destructive/50 bg-destructive/5">
+                    <CardHeader className="flex flex-row items-center gap-2">
+                      <AlertTriangle className="w-5 h-5 text-destructive" />
+                      <CardTitle className="text-destructive text-sm font-medium">Parsing Errors</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="list-disc pl-5 space-y-1 text-sm text-destructive/90">
+                        {parseErrors.map((error, index) => (
+                          <li key={index}>{error}</li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence mode="wait">
+              {selectedIndex !== null && (
+                <motion.div
+                  key={selectedIndex}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                >
+                  <Card className="border border-border/10 shadow-sm">
+                    <CardHeader className="bg-card sticky top-0 z-10 border-b border-border/10">
+                      <CardTitle className="text-lg font-medium text-card-foreground">Entry {selectedIndex + 1}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0 divide-y divide-border/10">
+                      {jsonlData[selectedIndex].messages.map((msg: any) => (
+                        <motion.div 
+                          key={msg.id}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ duration: 0.2 }}
+                          className={`p-4 transition-colors ${
+                            msg.role === 'system' 
+                              ? 'bg-blue-50/50 dark:bg-blue-950/20' 
+                              : msg.role === 'assistant' 
+                                ? 'bg-green-50/50 dark:bg-green-950/20' 
+                                : 'bg-gray-50/50 dark:bg-gray-950/20'
+                          }`}
+                        >
+                          <div className="max-w-3xl mx-auto">
+                            <div className="flex items-center gap-2 mb-2">
+                              {msg.role === 'system' ? (
+                                <Settings className="w-4 h-4 text-blue-700 dark:text-blue-400" />
+                              ) : msg.role === 'assistant' ? (
+                                <Bot className="w-4 h-4 text-green-700 dark:text-green-400" />
+                              ) : (
+                                <User className="w-4 h-4 text-gray-700 dark:text-gray-400" />
+                              )}
+                              <h3 className={`text-sm font-medium ${
+                                msg.role === 'system' 
+                                  ? 'text-blue-700 dark:text-blue-400' 
+                                  : msg.role === 'assistant' 
+                                    ? 'text-green-700 dark:text-green-400' 
+                                    : 'text-gray-700 dark:text-gray-400'
+                              } capitalize`}>
+                                {msg.role}
+                              </h3>
+                            </div>
+                            <Textarea
+                              value={msg.content}
+                              onChange={(e) => handleInputChange(msg.id, e.target.value)}
+                              className={`w-full min-h-[100px] resize-y bg-white dark:bg-[#1f1f1f] border-border/20 rounded-lg transition-all ${
+                                dirtyFields[msg.id] ? 'border-amber-500 dark:border-amber-500/50' : ''
+                              }`}
+                            />
+                          </div>
+                        </motion.div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+
+          <AnimatePresence>
+            {showSaveButton && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                className="fixed bottom-6 right-28"
+              >
+                <Button 
+                  onClick={handleSave} 
+                  className="bg-primary hover:bg-primary/90 shadow-lg gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  Save Changes
+                </Button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
+
       <AlertDialog open={showConfirmDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="bg-background border-border/10">
           <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
+              Unsaved Changes
+            </AlertDialogTitle>
             <AlertDialogDescription>
               You have unsaved changes. Are you sure you want to leave this page? Your changes will be lost.
             </AlertDialogDescription>

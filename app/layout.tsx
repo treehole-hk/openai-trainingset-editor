@@ -1,11 +1,13 @@
-import './globals.css'
+import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
+import './globals.css'
+import { ThemeProvider } from "@/components/theme-provider"
 
 const inter = Inter({ subsets: ['latin'] })
 
-export const metadata = {
-  title: 'OpenAI Fine-tune JSONL Editor',
-  description: 'Edit your OpenAI fine-tune JSONL files',
+export const metadata: Metadata = {
+  title: 'OpenAI Fine-tune Training Set Editor',
+  description: 'A modern editor for OpenAI fine-tuning JSONL files',
 }
 
 export default function RootLayout({
@@ -14,8 +16,17 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="h-full w-full">
-      <body className={`${inter.className} h-full w-full`}>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+        </ThemeProvider>
+      </body>
     </html>
   )
 }
