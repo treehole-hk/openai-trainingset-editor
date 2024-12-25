@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" rx="100" fill="#111111"/>
+  
+  <!-- JSONL file lines -->
+  <g transform="translate(96, 96)">
+    <!-- Curly braces and dots -->
+    <path d="M40 80C40 35.8172 76.8172 0 120 0H200C244.183 0 280 35.8172 280 80V240C280 284.183 244.183 320 200 320H120C76.8172 320 40 284.183 40 240V80Z" fill="#0EA5E9"/>
+    <path d="M100 120H220" stroke="white" stroke-width="24" stroke-linecap="round"/>
+    <path d="M100 200H180" stroke="white" stroke-width="24" stroke-linecap="round"/>
+    <path d="M100 280H200" stroke="white" stroke-width="24" stroke-linecap="round"/>
+  </g>
+</svg> 
