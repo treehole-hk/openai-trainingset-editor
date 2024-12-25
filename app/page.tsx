@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { parseJSONL, stringifyJSONL, extractSubject } from '../utils/jsonl'
-import { MessageSquare, Download, Upload, Save, ChevronRight, Bot, User, Settings, AlertTriangle, Github, X } from 'lucide-react'
+import { MessageSquare, Download, Upload, Save, ChevronRight, Bot, User, Settings, AlertTriangle, Github, X, Twitter, Linkedin } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export default function FineTuneEditor() {
@@ -309,6 +309,38 @@ export default function FineTuneEditor() {
                       It's completely free to use and runs entirely in your browser. 
                       With enough support, I'd love to add real-time validation and more advanced features to make your workflow even smoother!
                     </p>
+
+                    <div className="pt-4 border-t border-border/10">
+                      <h3 className="text-lg font-semibold text-foreground/90 mb-3">🤖 The AI-Powered Journey</h3>
+                      <p className="text-foreground/70">
+                        Here's something cool: I didn't write a single line of code for this tool! The entire project was created through AI pair programming.
+                        It started as a sketch using v0 by Vercel, then moved to GitHub where Cursor (an AI-powered IDE) helped build everything you see here.
+                        The initial version, from idea to public deployment, took just 2 hours of my time.
+                        This rapid development showcases how AI tools can help turn ideas into reality incredibly fast - 
+                        from ideation to deployment on Vercel, all through natural conversations with AI.
+                        This project is a testament to how AI can help create useful tools for the AI community.
+                      </p>
+                      <div className="flex items-center gap-4 mt-6 pt-4 border-t border-border/10">
+                        <a
+                          href="https://x.com/buryhuang"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-foreground/70 hover:text-primary transition-colors"
+                        >
+                          <Twitter className="w-5 h-5" />
+                          <span className="text-sm">Follow my journey</span>
+                        </a>
+                        <a
+                          href="https://www.linkedin.com/in/baryhuang/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-foreground/70 hover:text-primary transition-colors"
+                        >
+                          <Linkedin className="w-5 h-5" />
+                          <span className="text-sm">Connect on LinkedIn</span>
+                        </a>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
