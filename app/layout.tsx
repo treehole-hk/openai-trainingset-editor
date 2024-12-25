@@ -8,11 +8,30 @@ export const metadata: Metadata = {
   title: 'OpenAI Fine-tune Training Set Editor',
   description: 'A free, open-source web-based editor for OpenAI fine-tuning JSONL files. Edit and prepare your training data with a simple interface.',
   keywords: ['OpenAI', 'fine-tuning', 'JSONL', 'editor', 'training data', 'AI', 'machine learning'],
-  authors: [{ name: 'Bury Huang' }],
+  authors: [{ name: 'Bary Huang' }],
+  icons: {
+    icon: [
+      {
+        url: '/favicon.ico',
+        sizes: '32x32',
+        type: 'image/x-icon',
+      },
+      {
+        url: '/icon.png',
+        sizes: '192x192',
+        type: 'image/png',
+      },
+    ],
+    apple: {
+      url: '/apple-icon.png',
+      sizes: '180x180',
+      type: 'image/png',
+    },
+  },
   openGraph: {
     title: 'OpenAI Fine-tune Training Set Editor',
     description: 'A free, open-source web-based editor for OpenAI fine-tuning JSONL files',
-    url: 'https://openai-trainingset-editor.vercel.app',
+    url: 'https://jsonleditor.org',
     siteName: 'OpenAI Fine-tune Editor',
     locale: 'en_US',
     type: 'website',
