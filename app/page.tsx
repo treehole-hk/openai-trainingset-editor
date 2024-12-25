@@ -156,9 +156,9 @@ export default function FineTuneEditor() {
                 <div className="flex items-center flex-1 min-w-0 gap-3">
                   <Github className="h-5 w-5 text-primary" />
                   <p className="text-sm text-foreground/90">
-                    <span>This is a free, open-source project with </span>
-                    <span className="font-medium text-primary">no ads or tracking</span>
-                    <span>. Visit the </span>
+                    <span>Hey! I built this as a </span>
+                    <span className="font-medium text-primary">free and open-source tool</span>
+                    <span> because I needed it myself. Check out the </span>
                     <a
                       href="https://github.com/buryhuang/openai-trainingset-editor"
                       target="_blank"
@@ -167,7 +167,7 @@ export default function FineTuneEditor() {
                     >
                       GitHub Repository
                     </a>
-                    <span>. Your support helps keep this tool ad-free and continuously improved.</span>
+                    <span>. If you find it useful, your support helps me keep improving it!</span>
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -264,34 +264,60 @@ export default function FineTuneEditor() {
                 <Settings className="w-6 h-6 text-primary animate-spin-slow" />
                 <h1 className="text-2xl font-bold text-foreground/90">OpenAI Fine-tune Editor</h1>
               </div>
-              {jsonlData.length > 0 ? (
-                <div className="flex gap-2">
-                  <label className="relative cursor-pointer">
-                    <Input 
-                      type="file" 
-                      onChange={handleFileUpload} 
-                      accept=".jsonl" 
-                      className="sr-only"
+            </div>
+
+            {jsonlData.length > 0 ? (
+              <div className="flex gap-2 justify-end">
+                <label className="relative cursor-pointer">
+                  <Input 
+                    type="file" 
+                    onChange={handleFileUpload} 
+                    accept=".jsonl" 
+                    className="sr-only"
+                  />
+                  <div className="flex items-center gap-2 px-4 py-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-md transition-colors">
+                    <Upload className="w-4 h-4" />
+                    <span>Upload JSONL</span>
+                  </div>
+                </label>
+                <Button 
+                  onClick={handleDownload} 
+                  className="bg-primary hover:bg-primary/90 gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Download JSONL
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-start justify-between gap-12 mt-8">
+                <div className="flex-1 space-y-6">
+                  <div className="aspect-video rounded-lg overflow-hidden shadow-lg border border-border/10">
+                    <iframe
+                      className="w-full h-full"
+                      src="https://www.youtube.com/embed/VVKcSf6r3CM"
+                      title="Tutorial: How to use OpenAI Fine-tune Editor"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
                     />
-                    <div className="flex items-center gap-2 px-4 py-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-md transition-colors">
-                      <Upload className="w-4 h-4" />
-                      <span>Upload JSONL</span>
-                    </div>
-                  </label>
-                  <Button 
-                    onClick={handleDownload} 
-                    className="bg-primary hover:bg-primary/90 gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download JSONL
-                  </Button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <h2 className="text-xl font-semibold text-foreground/90">👋 Welcome!</h2>
+                    <p className="text-foreground/70">
+                      I created this editor because I couldn't find a simple tool for editing OpenAI fine-tuning datasets. 
+                      The video above from Corbin Brown shows what fine-tuning is about - that's exactly what this tool helps you prepare for. 
+                      It's completely free to use and runs entirely in your browser. 
+                      With enough support, I'd love to add real-time validation and more advanced features to make your workflow even smoother!
+                    </p>
+                  </div>
                 </div>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center mt-20">
+
+                <div className="flex-1 flex items-center justify-center">
                   <motion.div
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ type: "spring", damping: 20 }}
+                    className="w-full max-w-md"
                   >
                     <label className="relative cursor-pointer">
                       <Input 
@@ -300,18 +326,18 @@ export default function FineTuneEditor() {
                         accept=".jsonl" 
                         className="sr-only"
                       />
-                      <div className="flex flex-col items-center gap-4 p-8 border-2 border-dashed border-primary/20 hover:border-primary rounded-lg bg-primary/5 hover:bg-primary/10 transition-all group">
-                        <Upload className="w-12 h-12 text-primary group-hover:scale-110 transition-transform" />
+                      <div className="flex flex-col items-center gap-4 p-12 border-2 border-dashed border-primary/20 hover:border-primary rounded-lg bg-primary/5 hover:bg-primary/10 transition-all group">
+                        <Upload className="w-16 h-16 text-primary group-hover:scale-110 transition-transform" />
                         <div className="text-center">
-                          <h3 className="text-lg font-semibold text-primary mb-2">Upload your JSONL file</h3>
+                          <h3 className="text-xl font-semibold text-primary mb-3">Upload your JSONL file</h3>
                           <p className="text-sm text-foreground/70">Click or drag and drop your file here</p>
                         </div>
                       </div>
                     </label>
                   </motion.div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             <AnimatePresence>
               {parseErrors.length > 0 && (
