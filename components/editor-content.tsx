@@ -22,6 +22,8 @@ export function EditorContent() {
   const [leftBarWidth, setLeftBarWidth] = useState(320);
   const leftBarRef = useRef<HTMLDivElement>(null);
   const resizeRef = useRef<HTMLDivElement>(null);
+  const [isUnrecognizedFormat, setIsUnrecognizedFormat] = useState(false);
+  const [rawJsonlContent, setRawJsonlContent] = useState<string>('');
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -73,13 +75,43 @@ export function EditorContent() {
       const reader = new FileReader();
       reader.onload = (e) => {
         const content = e.target?.result as string;
-        const { data, errors } = parseJSONL(content);
-        setJsonlData(data);
-        setParseErrors(errors);
-        setDirtyFields({});
-        if (data.length > 0 && errors.length === 0) {
-          setSelectedIndex(0);
-        } else {
+        try {
+          const { data, errors } = parseJSONL(content);
+          // Check if any line has the expected messages array structure
+          const hasValidFormat = data.some(item => Array.isArray(item.messages));
+          
+          if (hasValidFormat) {
+            setJsonlData(data);
+            setParseErrors(errors);
+            setDirtyFields({});
+            setIsUnrecognizedFormat(false);
+            if (data.length > 0 && errors.length === 0) {
+              setSelectedIndex(0);
+            } else {
+              setSelectedIndex(null);
+            }
+          } else {
+            // Handle unrecognized format
+            setIsUnrecognizedFormat(true);
+            // Format the JSON for better readability
+            const prettyContent = content
+              .split('\n')
+              .filter(line => line.trim())
+              .map(line => {
+                try {
+                  return JSON.stringify(JSON.parse(line), null, 2);
+                } catch {
+                  return line;
+                }
+              })
+              .join('\n\n');
+            setRawJsonlContent(prettyContent);
+            setJsonlData([]);
+            setSelectedIndex(null);
+          }
+        } catch (error: any) {
+          setParseErrors([`Failed to parse file: ${error.message || 'Unknown error'}`]);
+          setJsonlData([]);
           setSelectedIndex(null);
         }
       };
@@ -151,6 +183,120 @@ export function EditorContent() {
       setShowSaveButton(false);
     }
   };
+
+  if (isUnrecognizedFormat) {
+    const jsonObjects = rawJsonlContent.split('\n\n').map((content, index) => ({
+      content,
+      index
+    }));
+
+    return (
+      <div className="w-full">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-6 h-6 text-amber-500" />
+            <h1 className="text-2xl font-bold text-white/90">Unrecognized JSONL Format</h1>
+          </div>
+          <div className="flex gap-2">
+            <label className="relative cursor-pointer">
+              <Input 
+                type="file" 
+                onChange={handleFileUpload} 
+                accept=".jsonl" 
+                className="sr-only"
+              />
+              <div className="flex items-center gap-2 px-4 py-2 bg-[#1a1a1a] hover:bg-[#222222] text-white rounded-md transition-colors">
+                <Upload className="w-4 h-4" />
+                <span>Upload Another File</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div className="flex flex-1 h-[calc(100vh-8rem)] overflow-hidden bg-[#1a1a1a] rounded-lg border border-white/10">
+          {/* Left sidebar with JSON object list */}
+          <motion.div 
+            ref={leftBarRef} 
+            initial={{ x: -320 }}
+            animate={{ x: 0 }}
+            transition={{ type: "spring", damping: 20 }}
+            className="border-r border-white/10 bg-[#1a1a1a] overflow-hidden relative"
+            style={{ width: leftBarWidth }}
+          >
+            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-primary" />
+                <h2 className="text-lg font-semibold text-white/90">JSON Objects</h2>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleHomeClick}
+                className="w-8 h-8 text-white/70 hover:text-white hover:bg-white/5"
+                title="Back to Home"
+              >
+                <Home className="w-4 h-4" />
+              </Button>
+            </div>
+            <ScrollArea className="h-[calc(100vh-65px)]">
+              <div className="p-2">
+                <AnimatePresence>
+                  {jsonObjects.map((item, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.2, delay: index * 0.05 }}
+                    >
+                      <Button
+                        variant={selectedIndex === index ? "secondary" : "ghost"}
+                        className={`w-full justify-start mb-1 p-3 h-auto text-left transition-all group ${
+                          selectedIndex === index 
+                            ? 'bg-primary/20 text-primary border border-primary/20' 
+                            : 'text-white/70 hover:bg-white/5 hover:text-white'
+                        }`}
+                        onClick={() => setSelectedIndex(index)}
+                      >
+                        <div className="w-full overflow-hidden flex items-center gap-2">
+                          <ChevronRight className={`w-4 h-4 transition-transform ${
+                            selectedIndex === index ? 'rotate-90 text-primary' : 'text-white/70 group-hover:text-white group-hover:translate-x-1'
+                          }`} />
+                          <p className="truncate text-sm font-medium">
+                            Object {index + 1}
+                          </p>
+                        </div>
+                      </Button>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            </ScrollArea>
+            <div
+              ref={resizeRef}
+              className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/50 transition-colors"
+            />
+          </motion.div>
+
+          {/* Main content area */}
+          <div className="flex-1 overflow-auto">
+            <div className="p-6">
+              <Card className="border-amber-500/30 bg-[#1a1a1a]">
+                <CardHeader className="border-b border-white/10">
+                  <CardTitle className="text-amber-500">Read-only View</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4">
+                  <pre className="bg-[#111111] p-4 rounded-lg overflow-x-auto text-white/90 text-sm whitespace-pre">
+                    {selectedIndex !== null ? jsonObjects[selectedIndex].content : 'Select a JSON object from the sidebar'}
+                  </pre>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (jsonlData.length === 0) {
     return (
