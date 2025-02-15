@@ -1,0 +1,9 @@
+name = "openai-trainingset-editor"
+compatibility_date = "2024-02-01"
+
+[build]
+command = "npm run build"
+cwd = "."
+
+[site]
+bucket = ".vercel/output/static"

@@ -693,23 +693,61 @@ export function EditorContent() {
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: "spring", damping: 20 }}
-                className="w-full max-w-md"
+                className="w-full max-w-2xl px-4"
               >
-                <label className="relative cursor-pointer w-full">
-                  <Input 
-                    type="file" 
-                    onChange={handleFileUpload} 
-                    accept=".jsonl" 
-                    className="sr-only"
-                  />
-                  <div className="flex flex-col items-center gap-4 p-12 border-2 border-dashed border-white/20 hover:border-primary rounded-lg bg-[#1a1a1a] hover:bg-[#222222] transition-all group">
-                    <Upload className="w-16 h-16 text-primary group-hover:scale-110 transition-transform" />
-                    <div className="text-center">
-                      <h3 className="text-xl font-semibold text-primary mb-3">Upload your JSONL file</h3>
-                      <p className="text-sm text-white/70">Click or drag and drop your file here</p>
+                <div className="flex flex-col gap-4">
+                  <label className="relative cursor-pointer w-full">
+                    <Input 
+                      type="file" 
+                      onChange={handleFileUpload} 
+                      accept=".jsonl" 
+                      className="sr-only"
+                    />
+                    <div className="flex flex-col items-center gap-4 p-12 border-2 border-dashed border-white/20 hover:border-primary rounded-lg bg-[#1a1a1a] hover:bg-[#222222] transition-all group">
+                      <Upload className="w-16 h-16 text-primary group-hover:scale-110 transition-transform" />
+                      <div className="text-center">
+                        <h3 className="text-xl font-semibold text-primary mb-3">Upload your JSONL file</h3>
+                        <p className="text-sm text-white/70">Click or drag and drop your file here</p>
+                      </div>
                     </div>
-                  </div>
-                </label>
+                  </label>
+
+                  <div className="text-center text-white/70">or</div>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setJsonlData([{
+                        messages: [
+                          {
+                            id: crypto.randomUUID(),
+                            role: 'system',
+                            content: 'You are a helpful AI assistant.'
+                          },
+                          {
+                            id: crypto.randomUUID(),
+                            role: 'user',
+                            content: 'Hello! Start a new conversation...'
+                          },
+                          {
+                            id: crypto.randomUUID(),
+                            role: 'assistant',
+                            content: 'Hello! How can I help you today?'
+                          }
+                        ]
+                      }]);
+                      setSelectedIndex(0);
+                      setShowSaveButton(true);
+                      setDirtyFields({
+                        'initial': true
+                      });
+                    }}
+                    className="w-full py-8 text-lg gap-3 bg-white/5 text-white hover:bg-white/10 border-white/20 hover:border-primary transition-colors"
+                  >
+                    <Plus className="w-6 h-6" />
+                    Start from Scratch
+                  </Button>
+                </div>
               </motion.div>
             </div>
           ) : (
