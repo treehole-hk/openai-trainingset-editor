@@ -7,9 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { parseJSONL, stringifyJSONL, extractSubject } from '../utils/jsonl'
-import { MessageSquare, Download, Upload, Save, ChevronRight, Bot, User, Settings, AlertTriangle, Home, Twitter, Linkedin } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { MessageSquare, Download, Upload, Save, ChevronRight, Bot, User, Settings, AlertTriangle, Home, Trash2, Plus, Settings2, ThumbsUp, ThumbsDown, FileDown } from 'lucide-react'
+import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion'
+import { DragHandleDots2Icon } from '@radix-ui/react-icons'
 
 export function EditorContent() {
   const [jsonlData, setJsonlData] = useState<any[]>([]);
@@ -19,11 +21,16 @@ export function EditorContent() {
   const [showSaveButton, setShowSaveButton] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [nextSelectedIndex, setNextSelectedIndex] = useState<number | null>(null);
-  const [leftBarWidth, setLeftBarWidth] = useState(320);
+  const [leftBarWidth, setLeftBarWidth] = useState(420);
   const leftBarRef = useRef<HTMLDivElement>(null);
   const resizeRef = useRef<HTMLDivElement>(null);
   const [isUnrecognizedFormat, setIsUnrecognizedFormat] = useState(false);
   const [rawJsonlContent, setRawJsonlContent] = useState<string>('');
+  const [showSystemDialog, setShowSystemDialog] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [systemMessage, setSystemMessage] = useState('');
+  const [preferences, setPreferences] = useState<{[key: number]: 'chosen' | 'rejected'}>({});
+  const [showDPOWarning, setShowDPOWarning] = useState(false);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -47,7 +54,7 @@ export function EditorContent() {
 
     const onMouseMove = (e: MouseEvent) => {
       const newWidth = startWidth + e.clientX - startX;
-      setLeftBarWidth(Math.max(200, Math.min(newWidth, 400))); // Min 200px, Max 400px
+      setLeftBarWidth(Math.max(400, Math.min(newWidth, 480))); // Changed from 200/400 to 280/480
     };
 
     const onMouseUp = () => {
@@ -69,6 +76,7 @@ export function EditorContent() {
     };
   }, []);
 
+  // Update handleFileUpload to preserve preferences
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -77,13 +85,23 @@ export function EditorContent() {
         const content = e.target?.result as string;
         try {
           const { data, errors } = parseJSONL(content);
-          // Check if any line has the expected messages array structure
           const hasValidFormat = data.some(item => Array.isArray(item.messages));
           
           if (hasValidFormat) {
             setJsonlData(data);
             setParseErrors(errors);
-            setDirtyFields({});
+            // Load preferences and mark them as dirty
+            const newPreferences: {[key: number]: 'chosen' | 'rejected'} = {};
+            const newDirtyFields: {[key: string]: boolean} = {};
+            data.forEach((item, index) => {
+              if (item.preference === 'chosen' || item.preference === 'rejected') {
+                newPreferences[index] = item.preference;
+                newDirtyFields[`pref_${index}`] = true;
+              }
+            });
+            setPreferences(newPreferences);
+            setDirtyFields(newDirtyFields);
+            setShowSaveButton(Object.keys(newPreferences).length > 0);
             setIsUnrecognizedFormat(false);
             if (data.length > 0 && errors.length === 0) {
               setSelectedIndex(0);
@@ -134,7 +152,17 @@ export function EditorContent() {
     setShowSaveButton(true);
   };
 
+  // Update handleSave to include preferences
   const handleSave = () => {
+    // Create a backup of the current state including preferences
+    const dataWithPreferences = jsonlData.map((item, index) => ({
+      ...item,
+      preference: preferences[index] || null
+    }));
+    
+    const jsonlString = stringifyJSONL(dataWithPreferences);
+    localStorage.setItem('jsonlEditorBackup', jsonlString);
+    
     setDirtyFields({});
     setShowSaveButton(false);
   };
@@ -152,6 +180,74 @@ export function EditorContent() {
     URL.revokeObjectURL(url);
   };
 
+  const performDPOExport = () => {
+    // Get counts for filename
+    const chosenCount = Object.values(preferences).filter(p => p === 'chosen').length;
+    const rejectedCount = Object.values(preferences).filter(p => p === 'rejected').length;
+    const timestamp = new Date().toISOString().split('T')[0];
+    const baseFilename = `dpo_export_${chosenCount}chosen_${rejectedCount}rejected_${timestamp}`;
+
+    // Prepare JSONL data
+    const jsonlData1 = jsonlData.map((item, index) => ({
+      ...item,
+      preference: preferences[index] || null
+    }));
+    const jsonlString = stringifyJSONL(jsonlData1);
+
+    // Helper function to escape CSV values
+    const escapeCSV = (str: string) => {
+      if (!str) return '';
+      const escaped = str.replace(/"/g, '""');
+      return /[,"\n]/.test(str) ? `"${escaped}"` : str;
+    };
+
+    // Prepare CSV data with proper escaping
+    const chosen = jsonlData.filter((_, i) => preferences[i] === 'chosen');
+    const rejected = jsonlData.filter((_, i) => preferences[i] === 'rejected');
+    const maxLength = Math.max(chosen.length, rejected.length);
+    
+    let csvContent = "chosen,rejected\n";
+    for (let i = 0; i < maxLength; i++) {
+      const chosenContent = chosen[i] ? escapeCSV(JSON.stringify(chosen[i])) : '';
+      const rejectedContent = rejected[i] ? escapeCSV(JSON.stringify(rejected[i])) : '';
+      csvContent += `${chosenContent},${rejectedContent}\n`;
+    }
+
+    // Download JSONL file
+    const jsonlBlob = new Blob([jsonlString], { type: 'application/jsonl' });
+    const jsonlUrl = URL.createObjectURL(jsonlBlob);
+    const jsonlLink = document.createElement('a');
+    jsonlLink.href = jsonlUrl;
+    jsonlLink.download = `${baseFilename}.jsonl`;
+    document.body.appendChild(jsonlLink);
+    jsonlLink.click();
+    document.body.removeChild(jsonlLink);
+    URL.revokeObjectURL(jsonlUrl);
+
+    // Download CSV file
+    const csvBlob = new Blob([csvContent], { type: 'text/csv' });
+    const csvUrl = URL.createObjectURL(csvBlob);
+    const csvLink = document.createElement('a');
+    csvLink.href = csvUrl;
+    csvLink.download = `${baseFilename}.csv`;
+    document.body.appendChild(csvLink);
+    csvLink.click();
+    document.body.removeChild(csvLink);
+    URL.revokeObjectURL(csvUrl);
+  };
+
+  const handleDPOExport = () => {
+    const chosen = jsonlData.filter((_, i) => preferences[i] === 'chosen');
+    const rejected = jsonlData.filter((_, i) => preferences[i] === 'rejected');
+    
+    if (chosen.length === 0 || rejected.length === 0) {
+      setShowDPOWarning(true);
+      return;
+    }
+    
+    performDPOExport();
+  };
+
   const handleSubjectClick = (index: number) => {
     if (Object.keys(dirtyFields).length > 0) {
       setShowConfirmDialog(true);
@@ -162,6 +258,11 @@ export function EditorContent() {
   };
 
   const handleConfirmNavigation = () => {
+    if (nextSelectedIndex === null) {
+      setJsonlData([]);
+      setPreferences({}); // Clear preferences when confirming navigation to home
+      localStorage.removeItem('jsonlEditorBackup');
+    }
     setSelectedIndex(nextSelectedIndex);
     setDirtyFields({});
     setShowSaveButton(false);
@@ -172,6 +273,7 @@ export function EditorContent() {
     setShowConfirmDialog(false);
   };
 
+  // Update handleHomeClick to also clear preferences
   const handleHomeClick = () => {
     if (Object.keys(dirtyFields).length > 0) {
       setShowConfirmDialog(true);
@@ -181,7 +283,69 @@ export function EditorContent() {
       setSelectedIndex(null);
       setDirtyFields({});
       setShowSaveButton(false);
+      setPreferences({}); // Clear preferences when clearing the editor
+      localStorage.removeItem('jsonlEditorBackup'); // Clear backup as well
     }
+  };
+
+  const handleSystemMessageEdit = (index: number) => {
+    const conversation = jsonlData[index];
+    const sysMsg = conversation.messages.find((m: any) => m.role === 'system')?.content || '';
+    setSystemMessage(sysMsg);
+    setEditingIndex(index);
+    setShowSystemDialog(true);
+  };
+
+  const handleSystemMessageSave = () => {
+    if (editingIndex === null) return;
+    
+    const newData = [...jsonlData];
+    const conversation = newData[editingIndex];
+    const systemIndex = conversation.messages.findIndex((m: any) => m.role === 'system');
+    
+    if (systemIndex >= 0) {
+      // Update existing system message
+      conversation.messages[systemIndex].content = systemMessage;
+    } else {
+      // Add new system message at the start
+      conversation.messages.unshift({
+        id: crypto.randomUUID(),
+        role: 'system',
+        content: systemMessage
+      });
+    }
+    
+    setJsonlData(newData);
+    setShowSystemDialog(false);
+    setEditingIndex(null);
+    setShowSaveButton(true);
+  };
+
+  const handleAddConversation = () => {
+    const newConversation = {
+      messages: [
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: 'Start a new conversation...'  // Changed from 'New conversation' to be more descriptive
+        },
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: 'Hello! How can I help you today?'  // Add an initial assistant response
+        }
+      ]
+    };
+    
+    const newData = [...jsonlData, newConversation];
+    setJsonlData(newData);
+    setSelectedIndex(newData.length - 1);
+    setDirtyFields(prev => ({
+      ...prev, 
+      [newConversation.messages[0].id]: true,
+      [newConversation.messages[1].id]: true
+    }));
+    setShowSaveButton(true);
   };
 
   if (isUnrecognizedFormat) {
@@ -217,7 +381,7 @@ export function EditorContent() {
           {/* Left sidebar with JSON object list */}
           <motion.div 
             ref={leftBarRef} 
-            initial={{ x: -320 }}
+            initial={{ x: -360 }}  // Changed from -320 to -360
             animate={{ x: 0 }}
             transition={{ type: "spring", damping: 20 }}
             className="border-r border-white/10 bg-[#1a1a1a] overflow-hidden relative"
@@ -298,190 +462,238 @@ export function EditorContent() {
     );
   }
 
-  if (jsonlData.length === 0) {
-    return (
-      <div>
-        {/* Video and upload section */}
-        <div className="grid grid-cols-2 gap-12">
-          <div className="aspect-video">
-            <iframe
-              className="w-full h-full rounded-lg"
-              src="https://www.youtube.com/embed/VVKcSf6r3CM"
-              title="Fine-tuning ChatGPT with OpenAI Tutorial"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          </div>
+  // Add auto-recovery on component mount
+  useEffect(() => {
+    const backup = localStorage.getItem('jsonlEditorBackup');
+    if (backup && jsonlData.length === 0) {
+      try {
+        const { data, errors } = parseJSONL(backup);
+        if (data.length > 0) {
+          setJsonlData(data);
+          // Restore preferences and mark them as dirty
+          const newPreferences: {[key: number]: 'chosen' | 'rejected'} = {};
+          const newDirtyFields: {[key: string]: boolean} = {};
+          data.forEach((item, index) => {
+            if (item.preference === 'chosen' || item.preference === 'rejected') {
+              newPreferences[index] = item.preference;
+              newDirtyFields[`pref_${index}`] = true;
+            }
+          });
+          setPreferences(newPreferences);
+          setDirtyFields(newDirtyFields);
+          setShowSaveButton(Object.keys(newPreferences).length > 0);
+          setParseErrors(errors);
+          setSelectedIndex(0);
+        }
+      } catch (error) {
+        console.error('Failed to recover backup:', error);
+      }
+    }
+  }, []);
 
-          <div className="flex items-center justify-center">
-            <div className="w-full max-w-md">
-              <label className="cursor-pointer block">
-                <Input 
-                  type="file" 
-                  onChange={handleFileUpload} 
-                  accept=".jsonl" 
-                  className="sr-only"
-                />
-                <div className="border-2 border-dashed border-white/20 rounded-lg p-12 text-center hover:border-white/40 transition-colors">
-                  <div className="flex justify-center mb-4">
-                    <Upload className="w-16 h-16 text-white/70 group-hover:text-white/90 transition-colors" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-white mb-2">Upload your JSONL file</h3>
-                  <p className="text-white/70">Click or drag and drop your file here</p>
-                </div>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        {/* Welcome content */}
-        <div className="mt-12">
-          {/* Second row: Welcome and AI Journey */}
-          <div className="grid grid-cols-2 gap-12 mt-12">
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-white/90">👋 Welcome!</h2>
-              <p className="text-white/70">
-                I created this editor because I couldn't find a simple tool for editing OpenAI fine-tuning datasets. 
-                The video above shows what fine-tuning is about - that's exactly what this tool helps you prepare for. 
-                It's completely free to use and runs entirely in your browser. 
-                With enough support, I'd love to add real-time validation and more advanced features to make your workflow even smoother!
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-white/90">🤖 The AI-Powered Journey</h2>
-              <p className="text-white/70">
-                Here's something cool: I didn't write a single line of code for this tool! The entire project was created through AI pair programming.
-                It started as a sketch using v0 by Vercel, then moved to GitHub where Cursor (an AI-powered IDE) helped build everything you see here.
-                The initial version, from idea to public deployment, took just 2 hours of my time.
-                This rapid development showcases how AI tools can help turn ideas into reality incredibly fast - 
-                from ideation to deployment on Vercel, all through natural conversations with AI.
-                This project is a testament to how AI can help create useful tools for the AI community.
-              </p>
-              <div className="flex items-center gap-4 pt-4 border-t border-white/10">
-                <a
-                  href="https://x.com/buryhuang"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-white/70 hover:text-primary transition-colors"
-                >
-                  <Twitter className="w-5 h-5" />
-                  <span className="text-sm">Follow my journey</span>
-                </a>
-                <a
-                  href="https://www.linkedin.com/in/baryhuang/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-white/70 hover:text-primary transition-colors"
-                >
-                  <Linkedin className="w-5 h-5" />
-                  <span className="text-sm">Connect on LinkedIn</span>
-                </a>
-              </div>
-            </div>
-          </div>
-
-          {/* Third row: Article */}
-          <article className="mt-12 pt-8 border-t border-white/10">
-            <div className="prose prose-invert max-w-none [&_p]:text-white/70 [&_h1]:text-white/90 [&_h2]:text-white/90 [&_li]:text-white/70">
-              <h1 className="text-2xl font-bold mb-6">Understanding JSONL Files and AI Training</h1>
-              
-              <section>
-                <h2 className="text-xl font-semibold mt-8 mb-4">What is a JSONL File?</h2>
-                <p>
-                  A JSONL (JSON Lines) file is a convenient format for storing structured data where each line is a valid JSON object.
-                  In the context of AI training, each line represents a single training example, making it perfect for handling large datasets
-                  without loading everything into memory at once.
-                </p>
-                <pre className="bg-[#1a1a1a] p-4 rounded-lg overflow-x-auto my-4">
-                  <code className="text-sm text-white/90">{`{"name": "example1", "value": 42}
-{"name": "example2", "value": 43}
-{"name": "example3", "value": 44}`}</code>
-                </pre>
-              </section>
-
-              <section>
-                <h2 className="text-xl font-semibold mt-8 mb-4">JSONL Files and OpenAI Fine-tuning</h2>
-                <p>
-                  OpenAI's fine-tuning process uses JSONL files as the standard format for training data. Each line contains a conversation
-                  with messages from different roles (system, user, assistant), allowing you to teach the AI specific patterns, styles, or
-                  domain knowledge. This format ensures that the AI model can clearly understand the role and context of each message in the
-                  conversation.
-                </p>
-                <pre className="bg-[#1a1a1a] p-4 rounded-lg overflow-x-auto my-4">
-                  <code className="text-sm text-white/90">{`{
-  "messages": [
-    {"role": "system", "content": "You are a helpful AI assistant focused on technical support."},
-    {"role": "user", "content": "How do I check my Python version?"},
-    {"role": "assistant", "content": "You can check your Python version by opening a terminal and running: python --version"}
-  ]
-}
-{
-  "messages": [
-    {"role": "system", "content": "You are a helpful AI assistant focused on technical support."},
-    {"role": "user", "content": "How do I install pip?"},
-    {"role": "assistant", "content": "To install pip on most systems, you can download get-pip.py and run it with Python: curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && python get-pip.py"}
-  ]
-}`}</code>
-                </pre>
-              </section>
-
-              <section>
-                <h2 className="text-xl font-semibold mt-8 mb-4">The Critical Role of Human Evaluation</h2>
-                <p>
-                  Human evaluation and editing of training data is crucial for developing reliable AI agents. By carefully reviewing and
-                  editing JSONL files, we can:
-                </p>
-                <ul className="list-disc pl-6 mt-4 space-y-2" role="list">
-                  <li>Ensure the quality and accuracy of training examples</li>
-                  <li>Remove biases or inappropriate content from the dataset</li>
-                  <li>Maintain consistency in the AI's responses</li>
-                  <li>Add context-specific instructions through system messages</li>
-                  <li>Iterate and improve based on observed AI behavior</li>
-                </ul>
-              </section>
-
-              <section>
-                <h2 className="text-xl font-semibold mt-8 mb-4">Building Smarter AI Agents</h2>
-                <p>
-                  The path to creating autonomous and intelligent AI agents heavily relies on the quality of their training data.
-                  By providing well-structured, carefully curated examples through JSONL files, we can guide AI models to better
-                  understand context, maintain consistency, and provide more helpful responses. This human-in-the-loop approach
-                  to AI training ensures that models remain aligned with human values and expectations while continuously improving
-                  their capabilities.
-                </p>
-              </section>
-            </div>
-          </article>
-        </div>
-      </div>
-    )
-  }
-
-  // Render editor interface when jsonlData has items
   return (
     <div className="w-full">
-      {jsonlData.length === 0 ? (
-        <div className="space-y-12">
-          {/* Video and Upload Section */}
-          <div className="flex items-start justify-between gap-12">
-            <div className="flex-1">
-              <div className="aspect-video rounded-lg overflow-hidden shadow-lg border border-white/10 bg-[#1a1a1a]">
-                <iframe
-                  className="w-full h-full"
-                  src="https://www.youtube.com/embed/VVKcSf6r3CM"
-                  title="Tutorial: How to use OpenAI Fine-tune Editor"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
+      <div className="flex flex-1 h-screen overflow-hidden bg-[#111111]">
+        {/* Left sidebar */}
+        {jsonlData.length > 0 && (
+          <motion.div 
+            ref={leftBarRef} 
+            initial={{ x: -360 }}  // Changed from -320 to -360
+            animate={{ x: 0 }}
+            transition={{ type: "spring", damping: 20 }}
+            className="border-r border-white/10 bg-[#1a1a1a] overflow-hidden relative"
+            style={{ width: leftBarWidth }}
+          >
+            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-primary" />
+                <h2 className="text-lg font-semibold text-white/90">Conversations</h2>
+              </div>
+              <div className="flex items-center">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleAddConversation}
+                  className="w-8 h-8 text-white/70 hover:text-white hover:bg-white/5 rounded-r-none border-r border-white/10"
+                  title="New Conversation"
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleHomeClick}
+                  className="w-8 h-8 text-white/70 hover:text-white hover:bg-white/5 rounded-none border-r border-white/10"
+                  title="Clear Editor"
+                >
+                  <Home className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleDownload}
+                  className="w-8 h-8 text-white/70 hover:text-white hover:bg-white/5 rounded-none border-r border-white/10"
+                  title="Download JSONL"
+                >
+                  <Download className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleDPOExport}
+                  className="w-8 h-8 text-white/70 hover:text-white hover:bg-white/5 rounded-l-none"
+                  title="Export DPO Dataset"
+                >
+                  <FileDown className="w-4 h-4" />
+                </Button>
               </div>
             </div>
-            <div className="flex-1">
+            <ScrollArea className="h-[calc(100vh-65px)]">
+              <div className="p-2">
+                {jsonlData.map((item, index) => (
+                  <div
+                    key={index}
+                    className="mb-1"
+                  >
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant={selectedIndex === index ? "secondary" : "ghost"}
+                        className={`flex-1 justify-start p-3 h-auto text-left transition-all group ${
+                          selectedIndex === index 
+                            ? 'bg-primary/20 text-primary border border-primary/20' 
+                            : 'text-white/70 hover:bg-white/5 hover:text-white'
+                        }`}
+                        onClick={() => handleSubjectClick(index)}
+                      >
+                        <div className="w-full flex items-center gap-2">
+                          <ChevronRight className={`w-4 h-4 flex-none transition-transform ${
+                            selectedIndex === index ? 'rotate-90 text-primary' : 'text-white/70 group-hover:text-white group-hover:translate-x-1'
+                          }`} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="truncate text-sm font-medium" style={{ maxWidth: `${leftBarWidth - 200}px` }}>
+                                {extractSubject(item)}
+                              </p>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPreferences(prev => ({
+                                      ...prev,
+                                      [index]: prev[index] === 'chosen' ? undefined : 'chosen'
+                                    }));
+                                    // Mark as dirty and show save button when preference changes
+                                    setDirtyFields(prev => ({...prev, [`pref_${index}`]: true}));
+                                    setShowSaveButton(true);
+                                  }}
+                                  className={`h-6 w-6 transition-colors ${
+                                    preferences[index] === 'chosen' 
+                                      ? 'text-green-500 hover:text-green-400 bg-green-500/10' 
+                                      : 'text-white/20 hover:text-white/40 hover:bg-white/5'
+                                  }`}
+                                  title={preferences[index] === 'chosen' ? 'Unmark as Chosen' : 'Mark as Chosen'}
+                                >
+                                  <ThumbsUp className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPreferences(prev => ({
+                                      ...prev,
+                                      [index]: prev[index] === 'rejected' ? undefined : 'rejected'
+                                    }));
+                                    // Mark as dirty and show save button when preference changes
+                                    setDirtyFields(prev => ({...prev, [`pref_${index}`]: true}));
+                                    setShowSaveButton(true);
+                                  }}
+                                  className={`h-6 w-6 transition-colors ${
+                                    preferences[index] === 'rejected' 
+                                      ? 'text-red-500 hover:text-red-400 bg-red-500/10' 
+                                      : 'text-white/20 hover:text-white/40 hover:bg-white/5'
+                                  }`}
+                                  title={preferences[index] === 'rejected' ? 'Unmark as Rejected' : 'Mark as Rejected'}
+                                >
+                                  <ThumbsDown className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                            <p className="text-xs text-white/50 truncate">
+                              {item.messages.filter((m: any) => m.role === 'user').length} user / {item.messages.filter((m: any) => m.role === 'assistant').length} assistant
+                              {item.messages.some((m: any) => m.role === 'system') && ' + system'}
+                              {preferences[index] && ` • ${preferences[index]}`}
+                            </p>
+                          </div>
+                        </div>
+                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSystemMessageEdit(index);
+                          }}
+                          className="h-8 w-8 text-white/40 hover:text-primary hover:bg-primary/10"  
+                          title="Edit System Message"
+                        >
+                          <Settings2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const newData = [...jsonlData];
+                            newData.splice(index, 1);
+                            setJsonlData(newData);
+                            // Update preferences when deleting a conversation
+                            const newPreferences = { ...preferences };
+                            delete newPreferences[index];
+                            // Shift all preference indices down
+                            Object.keys(newPreferences).forEach((key) => {
+                              const numKey = parseInt(key);
+                              if (numKey > index) {
+                                newPreferences[numKey - 1] = newPreferences[numKey];
+                                delete newPreferences[numKey];
+                              }
+                            });
+                            setPreferences(newPreferences);
+                            if (selectedIndex === index) {
+                              setSelectedIndex(null);
+                            } else if (selectedIndex && selectedIndex > index) {
+                              setSelectedIndex(selectedIndex - 1);
+                            }
+                          }}
+                          className="h-8 w-8 text-white/40 hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+            <div
+              ref={resizeRef}
+              className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/50 transition-colors"
+            />
+          </motion.div>
+        )}
+
+        {/* Main content area */}
+        <div className="flex-1 overflow-auto">
+          {jsonlData.length === 0 ? (
+            <div className="w-full flex items-center justify-center h-screen">
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: "spring", damping: 20 }}
-                className="w-full h-full flex items-center"
+                className="w-full max-w-md"
               >
                 <label className="relative cursor-pointer w-full">
                   <Input 
@@ -500,111 +712,8 @@ export function EditorContent() {
                 </label>
               </motion.div>
             </div>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-1 h-[calc(100vh-8rem)] overflow-hidden bg-[#1a1a1a] rounded-lg border border-white/10">
-          {/* Left sidebar with conversation list */}
-          {jsonlData.length > 0 && (
-            <motion.div 
-              ref={leftBarRef} 
-              initial={{ x: -320 }}
-              animate={{ x: 0 }}
-              transition={{ type: "spring", damping: 20 }}
-              className="border-r border-white/10 bg-[#1a1a1a] overflow-hidden relative"
-              style={{ width: leftBarWidth }}
-            >
-              <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5 text-primary" />
-                  <h2 className="text-lg font-semibold text-white/90">Conversations</h2>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleHomeClick}
-                  className="w-8 h-8 text-white/70 hover:text-white hover:bg-white/5"
-                  title="Back to Home"
-                >
-                  <Home className="w-4 h-4" />
-                </Button>
-              </div>
-              <ScrollArea className="h-[calc(100vh-65px)]">
-                <div className="p-2">
-                  <AnimatePresence>
-                    {jsonlData.map((item, index) => (
-                      <motion.div
-                        key={index}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        transition={{ duration: 0.2, delay: index * 0.05 }}
-                      >
-                        <Button
-                          variant={selectedIndex === index ? "secondary" : "ghost"}
-                          className={`w-full justify-start mb-1 p-3 h-auto text-left transition-all group ${
-                            selectedIndex === index 
-                              ? 'bg-primary/20 text-primary border border-primary/20' 
-                              : 'text-white/70 hover:bg-white/5 hover:text-white'
-                          }`}
-                          onClick={() => handleSubjectClick(index)}
-                        >
-                          <div className="w-full overflow-hidden flex items-center gap-2">
-                            <ChevronRight className={`w-4 h-4 transition-transform ${
-                              selectedIndex === index ? 'rotate-90 text-primary' : 'text-white/70 group-hover:text-white group-hover:translate-x-1'
-                            }`} />
-                            <p className="truncate text-sm font-medium">
-                              {extractSubject(item)}
-                            </p>
-                          </div>
-                        </Button>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                </div>
-              </ScrollArea>
-              <div
-                ref={resizeRef}
-                className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/50 transition-colors"
-              />
-            </motion.div>
-          )}
-
-          {/* Main content area */}
-          <div className="flex-1 overflow-auto">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="max-w-4xl mx-auto p-6 space-y-6"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Settings className="w-6 h-6 text-primary animate-spin-slow" />
-                  <h1 className="text-2xl font-bold text-white/90">OpenAI Fine-tune Editor</h1>
-                </div>
-                <div className="flex gap-2">
-                  <label className="relative cursor-pointer">
-                    <Input 
-                      type="file" 
-                      onChange={handleFileUpload} 
-                      accept=".jsonl" 
-                      className="sr-only"
-                    />
-                    <div className="flex items-center gap-2 px-4 py-2 bg-[#1a1a1a] hover:bg-[#222222] text-white rounded-md transition-colors">
-                      <Upload className="w-4 h-4" />
-                      <span>Upload JSONL</span>
-                    </div>
-                  </label>
-                  <Button 
-                    onClick={handleDownload} 
-                    className="bg-primary hover:bg-primary/90 gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download JSONL
-                  </Button>
-                </div>
-              </div>
-
+          ) : (
+            <div className="p-4">
               <AnimatePresence>
                 {parseErrors.length > 0 && (
                   <motion.div
@@ -641,60 +750,227 @@ export function EditorContent() {
                       <CardHeader className="bg-[#1a1a1a] sticky top-0 z-10 border-b border-white/10">
                         <CardTitle className="text-lg font-medium text-white">Entry {selectedIndex + 1}</CardTitle>
                       </CardHeader>
-                      <CardContent className="p-0 divide-y divide-white/10">
-                        {jsonlData[selectedIndex].messages.map((msg: any) => (
-                          <motion.div 
-                            key={msg.id}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 0.2 }}
-                            className={`p-4 transition-colors ${
-                              msg.role === 'system' 
-                                ? 'bg-blue-950/20' 
-                                : msg.role === 'assistant' 
-                                  ? 'bg-green-950/20' 
-                                  : 'bg-gray-950/20'
-                            }`}
-                          >
-                            <div className="max-w-3xl mx-auto">
-                              <div className="flex items-center gap-2 mb-2">
-                                {msg.role === 'system' ? (
-                                  <Settings className="w-4 h-4 text-blue-400" />
-                                ) : msg.role === 'assistant' ? (
-                                  <Bot className="w-4 h-4 text-green-400" />
-                                ) : (
-                                  <User className="w-4 h-4 text-gray-400" />
-                                )}
-                                <h3 className={`text-sm font-medium ${
-                                  msg.role === 'system' 
-                                    ? 'text-blue-400' 
-                                    : msg.role === 'assistant' 
-                                      ? 'text-green-400' 
-                                      : 'text-gray-400'
-                                } capitalize`}>
-                                  {msg.role}
-                                </h3>
+                      <CardContent className="p-0">
+                        <Reorder.Group
+                          axis="y"
+                          values={jsonlData[selectedIndex].messages}
+                          onReorder={(newOrder) => {
+                            const newData = [...jsonlData];
+                            newData[selectedIndex].messages = newOrder;
+                            setJsonlData(newData);
+                            setDirtyFields(prev => ({...prev, [newData[selectedIndex].messages.at(-1).id]: true}));
+                            setShowSaveButton(true);
+                          }}
+                          className="divide-y divide-white/10"
+                        >
+                          {jsonlData[selectedIndex].messages.map((msg: any, msgIndex: number) => (
+                            <motion.div key={msg.id}>
+                              {msgIndex === 0 && (
+                                <div className="flex justify-center gap-2 py-2 -mt-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      const newData = [...jsonlData];
+                                      newData[selectedIndex].messages.splice(0, 0, {
+                                        id: crypto.randomUUID(),
+                                        role: 'user',
+                                        content: ''
+                                      });
+                                      setJsonlData(newData);
+                                      setDirtyFields(prev => ({...prev, [newData[selectedIndex].messages[0].id]: true}));
+                                      setShowSaveButton(true);
+                                    }}
+                                    className="gap-1 text-xs h-7 px-2 bg-white/5 text-white hover:bg-white/10 border-white/40"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                    Insert User
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      const newData = [...jsonlData];
+                                      newData[selectedIndex].messages.splice(0, 0, {
+                                        id: crypto.randomUUID(),
+                                        role: 'assistant',
+                                        content: ''
+                                      });
+                                      setJsonlData(newData);
+                                      setDirtyFields(prev => ({...prev, [newData[selectedIndex].messages[0].id]: true}));
+                                      setShowSaveButton(true);
+                                    }}
+                                    className="gap-1 text-xs h-7 px-2 bg-white/5 text-white hover:bg-white/10 border-white/40"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                    Insert Assistant
+                                  </Button>
+                                </div>
+                              )}
+                              <Reorder.Item
+                                value={msg}
+                                id={msg.id}
+                                className={`p-4 transition-colors cursor-move`}
+                                whileDrag={{
+                                  scale: 1.02,
+                                  boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+                                  backgroundColor: "rgba(255,255,255,0.05)"
+                                }}
+                                style={{
+                                  backgroundColor: msg.role === 'system' 
+                                    ? 'rgba(59, 130, 246, 0.1)' 
+                                    : msg.role === 'assistant'
+                                      ? 'rgba(34, 197, 94, 0.1)'
+                                      : 'rgba(107, 114, 128, 0.1)'
+                                }}
+                              >
+                                <div className="max-w-3xl mx-auto">
+                                  <div className="flex items-center justify-between gap-2 mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <div className="cursor-move hover:bg-white/10 p-1 rounded">
+                                        <DragHandleDots2Icon className="w-4 h-4 text-white/40" />
+                                      </div>
+                                      {msg.role === 'system' ? (
+                                        <Settings className="w-4 h-4 text-blue-400" />
+                                      ) : msg.role === 'assistant' ? (
+                                        <Bot className="w-4 h-4 text-green-400" />
+                                      ) : (
+                                        <User className="w-4 h-4 text-gray-400" />
+                                      )}
+                                      <h3 className={`text-sm font-medium ${
+                                        msg.role === 'system' 
+                                          ? 'text-blue-400' 
+                                          : msg.role === 'assistant' 
+                                            ? 'text-green-400' 
+                                            : 'text-gray-400'
+                                      } capitalize`}>
+                                        {msg.role}
+                                      </h3>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => {
+                                        const newData = [...jsonlData];
+                                        newData[selectedIndex].messages = newData[selectedIndex].messages.filter(m => m.id !== msg.id);
+                                        setJsonlData(newData);
+                                        setDirtyFields(prev => {
+                                          const newFields = {...prev};
+                                          delete newFields[msg.id];
+                                          return newFields;
+                                        });
+                                        setShowSaveButton(true);
+                                      }}
+                                      className="h-8 w-8 text-white/40 hover:text-destructive hover:bg-destructive/10"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                  <Textarea
+                                    value={msg.content}
+                                    onChange={(e) => handleInputChange(msg.id, e.target.value)}
+                                    className={`w-full min-h-[100px] resize-y bg-[#1f1f1f] text-white/90 border-white/20 rounded-lg transition-all focus:border-primary focus:ring-1 focus:ring-primary ${
+                                      dirtyFields[msg.id] ? 'border-amber-500 focus:border-amber-500 focus:ring-amber-500' : ''
+                                    }`}
+                                    placeholder={`Enter ${msg.role}'s message...`}
+                                  />
+                                </div>
+                              </Reorder.Item>
+                              <div className="flex justify-center gap-2 py-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const newData = [...jsonlData];
+                                    newData[selectedIndex].messages.splice(msgIndex + 1, 0, {
+                                      id: crypto.randomUUID(),
+                                      role: 'user',
+                                      content: ''
+                                    });
+                                    setJsonlData(newData);
+                                    setDirtyFields(prev => ({...prev, [newData[selectedIndex].messages[msgIndex + 1].id]: true}));
+                                    setShowSaveButton(true);
+                                  }}
+                                  className="gap-1 text-xs h-7 px-2 bg-white/5 text-white hover:bg-white/10 border-white/40"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                  Insert User
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const newData = [...jsonlData];
+                                    newData[selectedIndex].messages.splice(msgIndex + 1, 0, {
+                                      id: crypto.randomUUID(),
+                                      role: 'assistant',
+                                      content: ''
+                                    });
+                                    setJsonlData(newData);
+                                    setDirtyFields(prev => ({...prev, [newData[selectedIndex].messages[msgIndex + 1].id]: true}));
+                                    setShowSaveButton(true);
+                                  }}
+                                  className="gap-1 text-xs h-7 px-2 bg-white/5 text-white hover:bg-white/10 border-white/40"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                  Insert Assistant
+                                </Button>
                               </div>
-                              <Textarea
-                                value={msg.content}
-                                onChange={(e) => handleInputChange(msg.id, e.target.value)}
-                                className={`w-full min-h-[100px] resize-y bg-[#1f1f1f] text-white/90 border-white/20 rounded-lg transition-all focus:border-primary focus:ring-1 focus:ring-primary ${
-                                  dirtyFields[msg.id] ? 'border-amber-500 focus:border-amber-500 focus:ring-amber-500' : ''
-                                }`}
-                                placeholder={`Enter ${msg.role}'s message...`}
-                              />
-                            </div>
-                          </motion.div>
-                        ))}
+                            </motion.div>
+                          ))}
+                        </Reorder.Group>
                       </CardContent>
+                      {/* Replace the single Add Message button with two buttons */}
+                      <div className="flex justify-center gap-2 p-4 border-t border-white/10">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            if (selectedIndex !== null) {
+                              const newData = [...jsonlData];
+                              newData[selectedIndex].messages.push({
+                                id: crypto.randomUUID(),
+                                role: 'user',
+                                content: ''
+                              });
+                              setJsonlData(newData);
+                              setDirtyFields(prev => ({...prev, [newData[selectedIndex].messages.at(-1).id]: true}));
+                              setShowSaveButton(true);
+                            }
+                          }}
+                          className="gap-2 bg-white/5 text-white hover:bg-white/10 border-white/40"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add User Message
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            if (selectedIndex !== null) {
+                              const newData = [...jsonlData];
+                              newData[selectedIndex].messages.push({
+                                id: crypto.randomUUID(),
+                                role: 'assistant',
+                                content: ''
+                              });
+                              setJsonlData(newData);
+                              setDirtyFields(prev => ({...prev, [newData[selectedIndex].messages.at(-1).id]: true}));
+                              setShowSaveButton(true);
+                            }
+                          }}
+                          className="gap-2 bg-white/5 text-white hover:bg-white/10 border-white/40"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add Assistant Message
+                        </Button>
+                      </div>
                     </Card>
                   </motion.div>
                 )}
               </AnimatePresence>
-            </motion.div>
-          </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       <AnimatePresence>
         {showSaveButton && (
@@ -702,7 +978,7 @@ export function EditorContent() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-6 right-28"
+            className="fixed bottom-6 right-6"
           >
             <Button 
               onClick={handleSave} 
@@ -732,6 +1008,69 @@ export function EditorContent() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={showSystemDialog} onOpenChange={(open) => !open && setShowSystemDialog(false)}>
+        <DialogContent className="bg-[#1a1a1a] border-white/10">
+          <DialogHeader>
+            <DialogTitle className="text-white">Edit System Message</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Textarea
+              value={systemMessage}
+              onChange={(e) => setSystemMessage(e.target.value)}
+              className="w-full min-h-[150px] resize-y bg-[#1f1f1f] text-white/90 border-white/20 rounded-lg transition-all focus:border-primary focus:ring-1 focus:ring-primary"
+              placeholder="Enter system message..."
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setShowSystemDialog(false)}
+              className="text-white/70 hover:text-white hover:bg-white/5"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSystemMessageSave}
+              className="bg-primary hover:bg-primary/90"
+            >
+              Save
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add DPO Warning Dialog */}
+      <AlertDialog open={showDPOWarning} onOpenChange={setShowDPOWarning}>
+        <AlertDialogContent className="bg-[#1a1a1a] border-white/10">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-white">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              Insufficient Data Pairs
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-white/70">
+              You need at least one chosen and one rejected conversation to create a valid DPO dataset. Would you like to export anyway?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              onClick={() => setShowDPOWarning(false)}
+              className="text-white/70 hover:text-white hover:bg-white/5"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowDPOWarning(false);
+                performDPOExport();
+              }}
+              className="bg-amber-500 hover:bg-amber-600"
+            >
+              Export Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
-  )
-} 
+  );
+}
